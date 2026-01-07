@@ -522,27 +522,53 @@ def load_snapshot(path: str) -> Snapshot:
         return Snapshot.from_dict(json.load(f))
 
 
-# CLI for testing
+# CLI for testing and programmatic use
 if __name__ == '__main__':
     import sys
+    import argparse
 
-    if len(sys.argv) < 2:
-        print("Usage: python snapshot.py <save_path_or_json> [previous_snapshot.json]")
-        print("  save_path_or_json: Either a .sav file or a pre-parsed .json file")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description='PAL-E Snapshot - Parse Palworld saves and detect changes')
+    parser.add_argument('save_path', help='Path to .sav file or pre-parsed .json file')
+    parser.add_argument('--json', action='store_true', help='Output JSON for programmatic use (no human-readable output)')
+    parser.add_argument('--diff', metavar='PREV_SNAPSHOT', help='Previous snapshot JSON file for diff comparison')
+    parser.add_argument('--no-save', action='store_true', help='Do not save snapshot to file')
+    args = parser.parse_args()
 
-    input_path = sys.argv[1]
+    input_path = args.save_path
 
     # Check if it's a JSON file (pre-parsed) or SAV file
     if input_path.endswith('.json'):
-        print(f"Loading pre-parsed JSON: {input_path}")
+        if not args.json:
+            print(f"Loading pre-parsed JSON: {input_path}")
         json_data = load_json_save(input_path)
         snapshot = create_snapshot(input_path, json_data)
     else:
-        print(f"Parsing save: {input_path}")
-        print("This may take a moment...")
+        if not args.json:
+            print(f"Parsing save: {input_path}")
+            print("This may take a moment...")
         snapshot = create_snapshot(input_path)
 
+    # JSON output mode - for Node.js consumption
+    if args.json:
+        output = snapshot.to_dict()
+
+        # Add diff events if previous snapshot provided
+        if args.diff:
+            try:
+                old_snapshot = load_snapshot(args.diff)
+                events = diff_snapshots(old_snapshot, snapshot)
+                output['events'] = [
+                    {'type': e.type, 'category': e.category, 'message': e.message, 'priority': e.priority}
+                    for e in events
+                ]
+            except Exception as e:
+                output['diff_error'] = str(e)
+                output['events'] = []
+
+        print(json.dumps(output))
+        sys.exit(0)
+
+    # Human-readable output mode
     print(f"\n=== SNAPSHOT ===")
     print(f"Timestamp: {snapshot.timestamp}")
     if snapshot.world_id:
@@ -557,10 +583,9 @@ if __name__ == '__main__':
     print(f"Bases: {len(snapshot.bases)}")
 
     # If previous snapshot provided, show diff
-    if len(sys.argv) >= 3:
-        prev_path = sys.argv[2]
-        print(f"\n=== DIFF from {prev_path} ===")
-        old_snapshot = load_snapshot(prev_path)
+    if args.diff:
+        print(f"\n=== DIFF from {args.diff} ===")
+        old_snapshot = load_snapshot(args.diff)
         events = diff_snapshots(old_snapshot, snapshot)
 
         if events:
@@ -569,7 +594,8 @@ if __name__ == '__main__':
         else:
             print("No changes detected.")
 
-    # Save current snapshot
-    output_path = 'snapshot_latest.json'
-    save_snapshot(snapshot, output_path)
-    print(f"\nSnapshot saved to {output_path}")
+    # Save current snapshot (unless --no-save)
+    if not args.no_save:
+        output_path = 'snapshot_latest.json'
+        save_snapshot(snapshot, output_path)
+        print(f"\nSnapshot saved to {output_path}")
