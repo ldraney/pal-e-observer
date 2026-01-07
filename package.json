@@ -1,0 +1,16 @@
+{
+  "name": "pal-e-observer",
+  "version": "1.0.0",
+  "description": "Save file watcher and event broadcaster for PAL-E ecosystem",
+  "main": "observer.js",
+  "scripts": {
+    "start": "node observer.js"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.0",
+    "ws": "^8.18.0"
+  },
+  "keywords": ["palworld", "observer", "websocket"],
+  "author": "",
+  "license": "MIT"
+}
