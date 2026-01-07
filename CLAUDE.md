@@ -1,27 +1,94 @@
 # PAL-E Observer
 
-Save file watching and observation layer for the PAL-E ecosystem.
-
-## Overview
-
-PAL-E Observer watches Palworld save files and detects changes in real-time. It's the "eyes" of the PAL-E system — observing gameplay through save file snapshots without any pre-loaded game knowledge.
+Save file watching and event broadcasting service for the PAL-E ecosystem.
 
 **Part of the [PAL-E Ecosystem](https://github.com/ldraney/pal-e)**
 
-## Philosophy
+## Overview
 
-- **Observation over assumption** — Learns from what it sees, not datamined tables
-- **Event-driven** — Detects changes between saves and broadcasts events
-- **Quantitative** — Extracts actual numbers (IVs, levels, counts) from saves
+PAL-E Observer is a standalone Node.js service that watches Palworld save files and broadcasts events via WebSocket. It's the "eyes" of the PAL-E system — observing gameplay through save file snapshots and detecting changes in real-time.
+
+## Quick Start
+
+```bash
+npm install
+npm start
+```
+
+**Endpoints:**
+- WebSocket: `ws://localhost:8765`
+- REST API: `http://localhost:8764`
+
+## Architecture
+
+```
+Save files change
+       ↓
+observer.js (file watcher)
+       ↓
+python snapshot.py --json --diff
+       ↓
+Compare to previous snapshot
+       ↓
+Broadcast events via WebSocket
+       ↓
+Dashboard displays events
+```
 
 ## What Observer Detects
 
-Save files update every ~30 seconds. Observer detects:
+Save files update on autosave (~10 min) or manual save. Observer detects:
 
-- **Pals**: Catches, releases, deaths, level changes
+- **Pals**: Catches, releases, level changes
 - **Players**: Joins, leaves, level ups
 - **Bases**: New base creation
-- **Stats**: IV values, passives, species
+- **Files**: Any .sav file change
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `observer.js` | Node.js service - file watcher, WebSocket server, REST API |
+| `snapshot.py` | Deep save parsing, diff detection, JSON output |
+| `parse_save.py` | Lightweight save parser (faster, less detail) |
+| `history.py` | Persistent save history, pattern learning |
+
+## REST API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /status` | Current world state and uptime |
+| `GET /history` | Recent event history |
+| `GET /health` | Health check |
+
+## WebSocket Events
+
+```javascript
+// On connect - greeting with current state
+{ type: 'greeting', worldState: {...}, recentEvents: [...] }
+
+// Game events from Level.sav diff
+{ type: 'game_event', eventType: 'pal_caught', message: 'Caught Lamball Lv.5', worldState: {...} }
+
+// Other .sav file changes
+{ type: 'file_changed', file: 'LocalData.sav', fileType: 'local', message: 'local updated' }
+```
+
+## CLI Usage
+
+```bash
+# Parse a save file (human-readable)
+python snapshot.py "path/to/Level.sav"
+
+# Parse with JSON output (for Node.js)
+python snapshot.py "path/to/Level.sav" --json
+
+# Parse and diff against previous snapshot
+python snapshot.py "path/to/Level.sav" --json --diff previous.json
+
+# Skip saving snapshot file
+python snapshot.py "path/to/Level.sav" --json --no-save
+```
 
 ## Data Extracted
 
@@ -38,89 +105,53 @@ Save files update every ~30 seconds. Observer detects:
 **Per World:**
 - World ID (from save path)
 - Base count
-- Game time
-
-## Save Intelligence
-
-Observer classifies saves and infers activity:
-
-| Save Type | Detection |
-|-----------|-----------|
-| `autosave` | 9-12 min interval |
-| `manual` | <2 min or >12 min |
-
-| Activity | Detection |
-|----------|-----------|
-| `combat` | Level ups detected |
-| `catching` | New Pals in roster |
-| `building` | Base count changed |
-| `managing` | Releases, no catches |
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `snapshot.py` | Deep save parsing, diff detection, SaveEvent tracking |
-| `parse_save.py` | Lightweight save parser (faster, less detail) |
-| `history.py` | Persistent save history, pattern learning |
-| `save_history.json` | Stored history data |
-
-## Usage
-
-```bash
-# Parse a save file
-python snapshot.py "path/to/Level.sav"
-
-# Compare two snapshots
-python snapshot.py "path/to/Level.sav" previous_snapshot.json
-```
-
-## Output Example
-
-```
-=== SNAPSHOT ===
-World ID: 55DCC9DE4A0032EC82005DA5B3C8C801
-Host: devopsphilosopher
-Players: 2
-  - devopsphilosopher (Lv.49) [HOST]
-  - JameyJam (Lv.18)
-Pals: 260
-Bases: 3
-```
+- Pal count
 
 ## Dependencies
 
-- Python 3.8+
-- `palworld-save-tools` (MRHRTZ fork for Oodle decompression)
+**Node.js:**
+```bash
+npm install  # installs chokidar, ws
+```
 
+**Python:**
 ```bash
 pip install palworld-save-tools
 ```
 
-## Integration
-
-Observer is designed to be consumed by:
-- **pal-e dashboard** — Displays world state in browser
-- **pal-e-expert** — Could query observation data for coaching context
-
-## Future
-
-- [ ] Standalone watcher service (Node.js with WebSocket)
-- [ ] REST API for querying current state
-- [ ] Event streaming to dashboard
-- [ ] Pattern learning from save history
-
-## Save Location
+## Save File Structure
 
 ```
-%LOCALAPPDATA%\Pal\Saved\SaveGames\<SteamID>\<WorldID>\Level.sav
+%LOCALAPPDATA%\Pal\Saved\SaveGames\
+├── UserOption.sav
+└── <SteamID>/
+    ├── GlobalPalStorage.sav
+    └── <WorldID>/
+        ├── Level.sav          ← Deep parsed
+        ├── LevelMeta.sav
+        ├── LocalData.sav
+        ├── WorldOption.sav
+        └── Players/
+            └── *.sav
 ```
 
 ## Multiplayer Notes
 
 | Role | Save Files Available |
 |------|---------------------|
-| **Host** | `Level.sav` + `LocalData.sav` — Full world parsing |
+| **Host** | `Level.sav` + all files — Full world parsing |
 | **Client** | Only `LocalData.sav` — Limited data |
 
 Host detection uses UID pattern: hosts have `00000000-0000-0000-0000-000000000001`.
+
+## Integration
+
+Observer broadcasts to:
+- **pal-e dashboard** — Displays world state in browser
+- **pal-e-expert** — Could query observation data for coaching context
+
+## Configuration
+
+Environment variables:
+- `OBSERVER_WS_PORT` — WebSocket port (default: 8765)
+- `OBSERVER_HTTP_PORT` — REST API port (default: 8764)
