@@ -1,0 +1,28 @@
+{
+  "events": [
+    {
+      "timestamp": "2026-01-06T12:25:19.836278",
+      "file_path": "C:/Users/drane/AppData/Local/Pal/Saved/SaveGames/76561199653115549/55DCC9DE4A0032EC82005DA5B3C8C801/Level.sav",
+      "file_size": 1354660,
+      "file_size_delta": 4660,
+      "time_since_last": 1027.250114,
+      "save_type": "manual",
+      "events": [
+        {
+          "type": "pal_leveled",
+          "category": "pal",
+          "message": "DrillGame leveled up: 20 -> 21",
+          "priority": 3
+        }
+      ],
+      "inferred_activity": "combat",
+      "snapshot_summary": {
+        "pal_count": 260,
+        "player_count": 2,
+        "base_count": 3
+      }
+    }
+  ],
+  "patterns": {},
+  "last_updated": "2026-01-06T12:46:02.691602"
+}
